@@ -1,7 +1,7 @@
 # Venta plugin based on sockets
-# Author: ajarzyna, 2021
+# Author: ajarzyn, 2021
 """
-<plugin key="VENTA" name="Venta based on sockets." author="ajarzyn" version="0.0.1">
+<plugin key="VENTA" name="Venta based on sockets." author="ajarzyn" version="0.0.2">
     <description>
         <h2>Venta based on sockets.</h2><br/>
         Be aware:
@@ -10,7 +10,7 @@
     </description>
     <params>
         <param field="Address" label="Venta IP Address" width="200px" required="true" default="127.0.0.1"/>
-        <param field="Mode1" label="MAC Address" width="150px" required="false" default="ff:ff:ff:ff:ff:ff"/>
+        <param field="Mode1" label="mac Address" width="150px" required="false" default="ff:ff:ff:ff:ff:ff"/>
         <param field="Port" label="Venta Port" width="30px" required="true" default="48000"/>
         <param field="Mode3" label="Hash" width="150px" required="true"/>
         <param field="Mode4" label="App Name" width="150px" required="false" default="Venta App"/>
@@ -35,6 +35,7 @@
 import Domoticz
 import json
 import socket
+import textwrap
 
 
 class VentaAPI:
@@ -44,15 +45,15 @@ class VentaAPI:
     }
 
     class OnOff:
-        def __init__(self, parent_class, method_name, *args):
+        def __init__(self, parent_class, method_name, *_):
             self.method_name = method_name
             self.parent_class = parent_class
 
-        def on(self, *args):
+        def on(self, *_):
             return self.parent_class.set_param(self.method_name, 'true')
             # return self.method_name, 'true'
 
-        def off(self, *args):
+        def off(self, *_):
             return self.parent_class.set_param(self.method_name, 'false')
             # return self.method_name, 'false'
 
@@ -69,11 +70,11 @@ class VentaAPI:
             setattr(self, "off", self.zero)
             setattr(self, "on", self.one)
 
-        def one(self, *args):
+        def one(self, *_):
             return self.parent_class.set_param(self.method_name, 1)
             # return self.parent, 1
 
-        def zero(self, *args):
+        def zero(self, *_):
             return self.parent_class.set_param(self.method_name, 0)
             # return self.parent, 0
 
@@ -89,11 +90,10 @@ class VentaAPI:
             setattr(self, "off", self.set_level)
             setattr(self, "on", self.set_level)
 
-        def set_level(self, domoticz_level, *args):
+        def set_level(self, domoticz_level, *_):
             list_idx = int(domoticz_level / 10)
             if list_idx < len(self.available_levels):
                 return self.parent_class.set_param(self.method_name, self.available_levels[list_idx])
-                # return self.set_param(self.parent, level)
             else:
                 pass
                 return None, None
@@ -108,7 +108,7 @@ class VentaAPI:
         'Boost': (OnOff, []),
         'SleepMode': (OnOff, []),
         'ChildLock': (OnOff, []),
-        'TempUnit': (ZeroOne, ["celsius", "farenheit"]),  # 0 - celsius, 1 - farenheit
+        'TempUnit': (ZeroOne, ["celsius", "fahrenheit"]),  # 0 - celsius, 1 - fahrenheit
         'DisplayLeft': (ZeroOne, ["humidity", "temperature"]),  # 0 - humidity, 1 - temperature
         'DisplayRight': (ZeroOne, ["vlines", "square"]),  # 0 - vertical line, 1 - square
         'FanSpeed': (Levels, FAN_SPED),
@@ -121,8 +121,8 @@ class VentaAPI:
         0: 'English',
         1: 'Chinese',
         2: 'English Kuubek XL-T',
-        3: 'Deutch(selected)/British',
-        4: 'Deutch(selected)/French',
+        3: 'Deutsch(selected)/British',
+        4: 'Deutsch(selected)/French',
         5: 'British(selected)/French',
         6: 'Chinese(selected)/British',
         7: 'Russian(Selected)/British',
@@ -130,35 +130,35 @@ class VentaAPI:
     }
 
     def __init__(self, mac_address, host, port=48000, hash=0, app_name=''):
-        self.mac_address = mac_address
-        self.header = f'"Header":{{"MacAdress":"{self.mac_address}","DeviceType":2,"Hash":"{hash}","DeviceName":"{app_name}"}}'
+        self.header = f'"Header":{{"macAdress":"{mac_address}","DeviceType":2,' \
+                      f'"Hash":"{hash}","DeviceName":"{app_name}"}}'
         self.host = host
         self.port = int(port)
 
     def send_command(self, message):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        local_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         try:
-            self.sock.settimeout(1)
-            self.sock.connect((self.host, self.port))
+            local_socket.settimeout(1)
+            local_socket.connect((self.host, self.port))
         except Exception as e:
             Domoticz.Debug("1" + str(e))
         try:
-            self.sock.settimeout(1)
-            self.sock.sendall(message)
+            local_socket.settimeout(1)
+            local_socket.sendall(message)
         except Exception as e:
             Domoticz.Debug("2" + str(e))
         try:
-            self.sock.settimeout(1)
-            received_data = self.sock.recv(1024).decode("utf-8")
+            local_socket.settimeout(1)
+            received_data = local_socket.recv(1024).decode("utf-8")
         except Exception as e:
             received_data = ''
             Domoticz.Debug("3" + str(e))
-        self.sock.close()
+        local_socket.close()
         return received_data
 
     def _prep_method(self, method, command_name='', value=''):
-        m = self.METHODS[method]
+        method_string = self.METHODS[method]
 
         command_line = ''
         if method is 'set_opt':
@@ -166,10 +166,11 @@ class VentaAPI:
 
         command_line += self.header
 
-        return f"""{m}
-        Content-Length: {len(command_line)}
-
-        {{{command_line}}}""".encode()
+        prepared_command = f"""{method_string}
+                        Content-Length: {len(command_line)}
+                        
+                        {{{command_line}}}"""
+        return textwrap.dedent(prepared_command).encode()
 
     def get_info(self):
         return self.send_command(self._prep_method('get_info'))
@@ -178,7 +179,7 @@ class VentaAPI:
         return self._prep_method('get_info')
 
     def set_param(self, command_name, value):
-        #return self.send_command(self._prep_method('set_opt', command_name, value))
+        # return self.send_command(self._prep_method('set_opt', command_name, value))
         return self._prep_method('set_opt', command_name, value)
 
 
@@ -222,25 +223,35 @@ def humidity(data: int) -> dict:
         status = 2
     return {'n_value': int(data), 's_value': str(status)}
 
+
 class BasePlugin:
     def __init__(self):
-        self.active_connection = None
+        self.dev_list = []
         self.UNITS = {}
         self.UNITS_ID_KEYS = {}
-        self.commandToSend = ''
-        self.connectionTimeout = 250
 
-    def PrepareDevicesList(self):
+        self.conn = None
+        self.conn_write = None
+        self.host = ''
+        self.port = ''
+        self.commandToSend = ''
+
+        self.Venta = None
+
+    def prepare_devices_list(self):
         self.dev_list = [
             # Name, socket command, idx, data modification callback, Domoticz devices options, is writable
             [['Measure', 'Temperature'], [to_float], dict(TypeName="Temperature", Used=1)],
             [['Measure', 'Humidity'],   [humidity], dict(TypeName="Humidity", Used=1)],
             [['Measure', 'Dust'],       [to_float], dict(TypeName="Custom", Used=1, Options={"Custom": "1;µg/m³"})],
             [['Measure', 'FanRpm'],     [to_float], dict(TypeName="Custom", Used=1, Options={"Custom": "1;RPM"})],
-            [['Measure', 'WaterLevel'], [to_alert, [(4, 'No container'), (4, 'Empty'), (3, 'Low'), (1, 'Full'), (1, 'Full')]],
-             dict(TypeName="Alert", Used=1)],
+            [['Measure', 'WaterLevel'], [to_alert, [(4, 'No container'),
+                                                    (3, 'Low'),
+                                                    (4, 'Empty'),
+                                                    (2, 'Medium'),
+                                                    (1, 'Full')]], dict(TypeName="Alert", Used=1)],
 
-            # Writables
+            # Writable
             [['Action', 'Automatic'],   [bool_to_number], dict(TypeName="Switch", Image=9, Used=1)],
             [['Action', 'ChildLock'],   [bool_to_number], dict(TypeName="Switch", Image=9, Used=1)],
             [['Action', 'Power'],       [bool_to_number], dict(TypeName="Switch", Image=9, Used=1)],
@@ -278,12 +289,12 @@ class BasePlugin:
                 self.data_conversion, *self._args = data_conversion
                 self.dev_params = dev_params
 
-            def updateDomoticzDev(self, data):
+            def update_domoticz_dev(self, data):
                 update_device(unit=self.id,
                               **self.data_conversion(data[self.category][self.name], *self._args))
 
-            def prepareDataToSend(self, data):
-                return (self.writ_message, self.address, data)
+            def prepare_data_to_send(self, data):
+                return self.writ_message, self.address, data
 
         for dev_idx in range(len(self.dev_list)):
             tmp_unit = Unit(dev_idx+1, *self.dev_list[dev_idx])
@@ -292,73 +303,72 @@ class BasePlugin:
             self.UNITS[tmp_unit.name] = tmp_unit
             self.UNITS_ID_KEYS[tmp_unit.id] = tmp_unit
 
-    def CreateDevices(self):
+    def create_devices(self):
         for unit in self.UNITS.values():
             if unit.id not in Devices:
                 Domoticz.Device(**unit.dev_params).Create()
 
-    def Update(self, data: str = ''):
+    def update_devices(self, data: str = ''):
         if data is '':
             return
-            data = self.Venta.get_info()
-        lastlineend = data.rfind('\n')
-        data = data[lastlineend + 1:-1]
+        last_eol = data.rfind('\n')
+        data = data[last_eol + 1:-1]
         parsed = json.loads(data)
         if len(parsed) > 0:
             for device in self.UNITS.values():
                 if device.category in parsed:
-                    device.updateDomoticzDev(parsed)
+                    device.update_domoticz_dev(parsed)
 
     def onStart(self):
         if Parameters["Mode6"] != "0":
             Domoticz.Debugging(int(Parameters["Mode6"]))
             DumpConfigToLog()
 
-        self.PrepareDevicesList()
+        self.prepare_devices_list()
 
-        self.name = Parameters['Name']
         self.host = Parameters['Address']
-        self.MAC = Parameters['Mode1']
         self.port = Parameters['Port']
-        self.hash = Parameters['Mode3']
-        self.app_name = Parameters['Mode4']
+        mac = Parameters['Mode1']
+        hash = Parameters['Mode3']
+        app_name = Parameters['Mode4']
 
-        self.Venta = VentaAPI(self.MAC, self.host, self.port, hash=self.hash, app_name=self.app_name)
+        self.Venta = VentaAPI(mac, self.host, self.port, hash=hash, app_name=app_name)
         for method_name, val in VentaAPI.command_dict.items():
             setattr(VentaAPI, method_name, val[0](self.Venta, method_name, val[1]))
 
         Domoticz.Heartbeat(int(Parameters['Mode2']))
 
         # Create devices for roomba
-        self.CreateDevices()
+        self.create_devices()
 
         self.conn = Domoticz.Connection(Name="READ", Transport="TCP/IP", Protocol="None",
-                                            Address=self.host, Port=self.port)
+                                        Address=self.host, Port=self.port)
         self.conn.Connect()
-        # self.Update()
 
     def onStop(self):
+        if self.conn.Connected() or self.conn.Connecting():
+            self.conn.Disconnect()
         Domoticz.Debug("onStop - Plugin is stopping.")
 
     def onDisconnect(self, Connection):
-        Domoticz.Debug(f"onDisconnect called for connection {Connection.Name} to: " + Connection.Address + ":" + Connection.Port)
-        # self.conn.Connect(Timeout=self.connectionTimeout)
+        Domoticz.Debug(f"onDisconnect called for Connection "
+                       f"{Connection.Name} to: {Connection.Address}:{Connection.Port}")
 
     def onConnect(self, Connection, status, Description):
-        Domoticz.Debug(f"onConnect called for connection {Connection.Name} to: " + Connection.Address + ":" + Connection.Port)
-        Domoticz.Debug("status: " + str(status) + " description:" + str(Description))
+        Domoticz.Debug(f"onConnect called for Connection {Connection.Name} to: {Connection.Address}:{Connection.Port}")
+        Domoticz.Debug(f"onConnect status: {str(status)}, Description: {str(Description)}")
         if self.commandToSend is not '' and Connection.Name == "WRITE":
             Connection.Send(self.commandToSend)
             self.commandToSend = ''
-        elif Connection.Name is 'READ':
+        elif Connection.Name == "READ":
             self.conn.Send(self.Venta.get_info_str())
 
     def onMessage(self, Connection, Data):
-        Domoticz.Debug(f"onMessage called for connection {Connection.Name} to: " + Connection.Address + ":" + Connection.Port)
-        self.Update(Data.decode())
+        Domoticz.Debug(f"onMessage called for connection {Connection.Name} to: {Connection.Address}:{Connection.Port}")
+        self.update_devices(Data.decode())
 
     def onCommand(self, Unit, Command, Level, Hue):
-        Domoticz.Debug("onCommand called for Unit " + str(Unit) + ": Command '" + str(Command) + "', Level: " + str(Level))
+        Domoticz.Debug(f"onCommand called for Unit: {str(Unit)}, Command {str(Command)}, Level: {str(Level)}")
         if Unit in self.UNITS_ID_KEYS:
             action = self.UNITS_ID_KEYS[Unit].name
             action_class = getattr(self.Venta, action)
@@ -366,10 +376,10 @@ class BasePlugin:
             message = target_method(Level)
 
             self.commandToSend = message
-            self.con2 = Domoticz.Connection(Name="WRITE", Transport="TCP/IP", Protocol="None",
-                                Address=self.host, Port=self.port)
+            self.conn_write = Domoticz.Connection(Name="WRITE", Transport="TCP/IP", Protocol="None",
+                                       Address=self.host, Port=self.port)
 
-            self.con2.Connect()
+            self.conn_write.Connect()
 
     def onHeartbeat(self):
         Domoticz.Debug("onHeartbeat called.")
@@ -380,7 +390,7 @@ class BasePlugin:
                 self.conn.Connect()
 
     def onTimeout(self, Connection):
-        Domoticz.Debug("onTimeout called for connection to: " + Connection.Address + ":" + Connection.Port)
+        Domoticz.Debug(f"onTimeout called for connection to: {Connection.Address}: {Connection.Port}")
         if self.conn.Connected() or self.conn.Connecting():
             self.conn.Disconnect()
 
@@ -429,10 +439,10 @@ def update_device(unit,
                   n_value=-1, s_value="", image_id=-1, sig_lvl=-1, bat_lvl=-1, opt={}, timed_out=-1, name="",
                   type_name="", type=-1, sub_type=-1, switch_type=-1, used=-1, descr="", color="", supp_trigg=-1):
     # Make sure that the Domoticz device still exists (they can be deleted) before updating it
-    Domoticz.Debug("update_device unit:" + str(unit))
+    Domoticz.Debug(f"update_device unit: {str(unit)}")
     if unit not in Devices:
         global _plugin
-        _plugin.CreateDevices()
+        _plugin.create_devices()
 
     args = {}
     # Must always be passed for update
@@ -446,7 +456,6 @@ def update_device(unit,
     else:
         args["sValue"] = Devices[unit].sValue
 
-    Domoticz.Debug(str(args))
     # Optionals
     if image_id != -1:
         args["Image"] = image_id
@@ -481,7 +490,7 @@ def update_device(unit,
         args["Color"] = color
     if supp_trigg != -1:
         args["SuppressTriggers"] = supp_trigg
-    Domoticz.Debug("Update with " + str(args))
+    Domoticz.Debug(f"Update with {str(args)}")
     Devices[unit].Update(**args)
 
 
@@ -489,13 +498,13 @@ def update_device(unit,
 def DumpConfigToLog():
     for x in Parameters:
         if Parameters[x] != "":
-            Domoticz.Debug( "'" + x + "':'" + str(Parameters[x]) + "'")
-    Domoticz.Debug("Device count: " + str(len(Devices)))
+            Domoticz.Debug(f"'{x}':'{str(Parameters[x])}'")
+    Domoticz.Debug(f"Device count: {str(len(Devices))}")
     for x in Devices:
-        Domoticz.Debug("Device:           " + str(x) + " - " + str(Devices[x]))
-        Domoticz.Debug("Device ID:       '" + str(Devices[x].ID) + "'")
-        Domoticz.Debug("Device Name:     '" + Devices[x].Name + "'")
-        Domoticz.Debug("Device nValue:    " + str(Devices[x].nValue))
-        Domoticz.Debug("Device sValue:   '" + Devices[x].sValue + "'")
-        Domoticz.Debug("Device LastLevel: " + str(Devices[x].LastLevel))
+        Domoticz.Debug(f"Device:           {str(x)} - {str(Devices[x])} ")
+        Domoticz.Debug(f"Device ID:       '{str(Devices[x].ID)}'        ")
+        Domoticz.Debug(f"Device Name:     '{Devices[x].Name}'           ")
+        Domoticz.Debug(f"Device nValue:    {str(Devices[x].nValue)}     ")
+        Domoticz.Debug(f"Device sValue:   '{Devices[x].sValue}'         ")
+        Domoticz.Debug(f"Device LastLevel: {str(Devices[x].LastLevel)}  ")
     return
