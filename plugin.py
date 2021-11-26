@@ -245,7 +245,7 @@ class BasePlugin:
             [['Measure', 'Humidity'],   [humidity], dict(TypeName="Humidity", Used=1)],
             [['Measure', 'Dust'],       [to_float], dict(TypeName="Custom", Used=1, Options={"Custom": "1;µg/m³"})],
             [['Measure', 'FanRpm'],     [to_float], dict(TypeName="Custom", Used=1, Options={"Custom": "1;RPM"})],
-            [['Measure', 'WaterLevel'], [to_alert, [(4, 'No container'),
+            [['Measure', 'WaterLevel'], [to_alert, [(0, 'Power off/No container'),
                                                     (3, 'Low'),
                                                     (4, 'Empty'),
                                                     (2, 'Medium'),
