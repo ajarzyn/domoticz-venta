@@ -198,7 +198,9 @@ def to_selector_switch(data: int, divider: float = 1.0) -> dict:
     return {'n_value': int(converted), 's_value': str(converted)}
 
 
-def bool_to_number(data: int, mapping: list = [False, True]) -> dict:
+def bool_to_number(data: int, mapping: list = None) -> dict:
+    if mapping is None:
+        mapping = [False, True]
     return {'n_value': mapping.index(data)}
 
 
@@ -293,9 +295,6 @@ class BasePlugin:
                 update_device(unit=self.id,
                               **self.data_conversion(data[self.category][self.name], *self._args))
 
-            def prepare_data_to_send(self, data):
-                return self.writ_message, self.address, data
-
         for dev_idx in range(len(self.dev_list)):
             tmp_unit = Unit(dev_idx+1, *self.dev_list[dev_idx])
             tmp_unit.dev_params.update(dict(Name=tmp_unit.name, Unit=tmp_unit.id))
@@ -315,9 +314,27 @@ class BasePlugin:
         data = data[last_eol + 1:-1]
         parsed = json.loads(data)
         if len(parsed) > 0:
-            for device in self.UNITS.values():
+            def update_device_if_in_data(device, parsed):
                 if device.category in parsed:
                     device.update_domoticz_dev(parsed)
+
+            # Measure sensors do not work when power is off
+            # Update power and use it's nValue to skip sensors update
+            power_device = self.UNITS['Power']
+
+            update_device_if_in_data(power_device, parsed)
+            power_device_state = Devices[power_device.id].nValue
+            fan_rpm_id = self.UNITS['FanRpm'].id
+
+            for device in self.UNITS.values():
+                if device.name == 'Power':
+                    # Power is updated outside the for
+                    continue
+                if device.category == 'Measure' and device.id != fan_rpm_id and power_device_state == 0:
+                    # Do not update Measure sensor when power is off
+                    continue
+
+                update_device_if_in_data(device, parsed)
 
     def onStart(self):
         if Parameters["Mode6"] != "0":
@@ -436,9 +453,12 @@ def onTimeout(Connection):
 
 
 def update_device(unit,
-                  n_value=-1, s_value="", image_id=-1, sig_lvl=-1, bat_lvl=-1, opt={}, timed_out=-1, name="",
+                  n_value=-1, s_value="", image_id=-1, sig_lvl=-1, bat_lvl=-1, opt=None, timed_out=-1, name="",
                   type_name="", type=-1, sub_type=-1, switch_type=-1, used=-1, descr="", color="", supp_trigg=-1):
     # Make sure that the Domoticz device still exists (they can be deleted) before updating it
+    if opt is None:
+        opt = {}
+
     Domoticz.Debug(f"update_device unit: {str(unit)}")
     if unit not in Devices:
         global _plugin
