@@ -1,7 +1,7 @@
 # Venta plugin based on sockets
-# Author: ajarzyn, 2021
+# Author: ajarzyn, 2023
 """
-<plugin key="VENTA" name="Venta based on sockets." author="ajarzyn" version="0.0.2">
+<plugin key="VENTA" name="Venta based on sockets." author="ajarzyn" version="0.0.3">
     <description>
         <h2>Venta based on sockets.</h2><br/>
         Be aware:
@@ -36,6 +36,7 @@ import Domoticz
 import json
 import socket
 import textwrap
+import queue
 
 
 class VentaAPI:
@@ -51,11 +52,9 @@ class VentaAPI:
 
         def on(self, *_):
             return self.parent_class.set_param(self.method_name, 'true')
-            # return self.method_name, 'true'
 
         def off(self, *_):
             return self.parent_class.set_param(self.method_name, 'false')
-            # return self.method_name, 'false'
 
     class ZeroOne:
         def __init__(self, parent_class, method_name, *args):
@@ -236,7 +235,7 @@ class BasePlugin:
         self.conn_write = None
         self.host = ''
         self.port = ''
-        self.commandToSend = ''
+        self.commandToSend = queue.Queue()
 
         self.Venta = None
 
@@ -355,7 +354,6 @@ class BasePlugin:
 
         Domoticz.Heartbeat(int(Parameters['Mode2']))
 
-        # Create devices for roomba
         self.create_devices()
 
         self.conn = Domoticz.Connection(Name="READ", Transport="TCP/IP", Protocol="None",
@@ -374,9 +372,14 @@ class BasePlugin:
     def onConnect(self, Connection, status, Description):
         Domoticz.Debug(f"onConnect called for Connection {Connection.Name} to: {Connection.Address}:{Connection.Port}")
         Domoticz.Debug(f"onConnect status: {str(status)}, Description: {str(Description)}")
-        if self.commandToSend is not '' and Connection.Name == "WRITE":
-            Connection.Send(self.commandToSend)
-            self.commandToSend = ''
+        
+        if not Connection.Connected():
+            Domoticz.Debug(f"onConnect status: {str(status)}, Description: {str(Description)}")
+            return
+        
+        if Connection.Name == "WRITE":
+            while not self.commandToSend.empty():
+                Connection.Send(self.commandToSend.get())
         elif Connection.Name == "READ":
             self.conn.Send(self.Venta.get_info_str())
 
@@ -392,7 +395,7 @@ class BasePlugin:
             target_method = getattr(action_class, str(Command).lower().replace(" ", "_"))
             message = target_method(Level)
 
-            self.commandToSend = message
+            self.commandToSend.put(message)
             self.conn_write = Domoticz.Connection(Name="WRITE", Transport="TCP/IP", Protocol="None",
                                        Address=self.host, Port=self.port)
 
